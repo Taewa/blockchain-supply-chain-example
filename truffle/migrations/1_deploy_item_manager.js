@@ -1,4 +1,4 @@
-const ItemManager = artifacts.require("ItemManager");
+const ItemManager = artifacts.require("ItemManager.sol");
 
 module.exports = function (deployer) {
   deployer.deploy(ItemManager);

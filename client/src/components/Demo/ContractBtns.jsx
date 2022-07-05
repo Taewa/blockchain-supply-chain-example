@@ -12,9 +12,7 @@ function ContractBtns({ setValue }) {
   };
 
   const read = async () => {
-    console.log(1, 'accounts[0]', accounts[0]);
     const value = await contract.methods.read().call({ from: accounts[0] });
-    console.log(22, 'val', value);
     
     setValue(value);
   };

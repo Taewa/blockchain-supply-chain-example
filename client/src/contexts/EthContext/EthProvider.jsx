@@ -7,22 +7,37 @@ function EthProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
   const init = useCallback(
-    async artifact => {
-      if (artifact) {
+    async artifacts => {
+      const {ItemManagerContract, ItemContract} = artifacts;
+
+      if (ItemManagerContract && ItemContract) {
         const web3 = new Web3(Web3.givenProvider || "ws://localhost:8545");
         const accounts = await web3.eth.requestAccounts();
         const networkID = await web3.eth.net.getId();
-        const { abi } = artifact;
-        let address, contract;
+        const ItemManagerContractAbi = ItemManagerContract.abi;
+        const ItemContractAbi = ItemContract.abi;
+        
+        let itemManagerContractAddress, itemManagerContract, itemContractAddress, itemContract;
         try {
-          address = artifact.networks[networkID].address;
-          contract = new web3.eth.Contract(abi, address);
+          itemManagerContractAddress = ItemManagerContract.networks[networkID].address;
+          itemManagerContract = new web3.eth.Contract(ItemManagerContractAbi, itemManagerContractAddress);
+          
+          // itemContractAddress = ItemContract.networks[networkID].address;
+          
+          /**
+           * I couldn't get the "networks" for itemContract from client/src/contracts/Item.json after truffle migrate
+           * So instead I use itemManagerContractAddress and it works fine
+           * But why there is the networks object is empty?
+          **/
+          itemContract = new web3.eth.Contract(ItemContractAbi, itemManagerContractAddress); 
+          listenToPaymentEvent(itemManagerContract);
+          
         } catch (err) {
           console.error(err);
         }
         dispatch({
           type: actions.init,
-          data: { artifact, web3, accounts, networkID, contract }
+          data: { artifact: artifacts, web3, accounts, networkID, contract: {itemManagerContract, itemContract} }
         });
       }
     }, []);
@@ -30,8 +45,9 @@ function EthProvider({ children }) {
   useEffect(() => {
     const tryInit = async () => {
       try {
-        const artifact = require("../../contracts/SimpleStorage.json");
-        init(artifact);
+        const ItemManagerContract = require("../../contracts/ItemManager.json");
+        const ItemContract = require("../../contracts/Item.json");
+        init({ItemManagerContract, ItemContract});
       } catch (err) {
         console.error(err);
       }
@@ -51,6 +67,19 @@ function EthProvider({ children }) {
       events.forEach(e => window.ethereum.removeListener(e, handleChange));
     };
   }, [init, state.artifact]);
+
+  const listenToPaymentEvent = (itemManagerContract) => {
+    itemManagerContract.events.SupplyChainStep()
+      .on('data', async (evt) => {
+        console.log('evt', evt);
+        if(evt.returnValues._step == "1") {
+          const item = await itemManagerContract.methods.items(evt.returnValues._itemIndex).call();
+
+          console.log('item', item);
+          console.log("Item " + item._identifier + " was paid, deliver it now!");
+        }
+      })
+  }
 
   return (
     <EthContext.Provider value={{
